@@ -20,13 +20,12 @@ import (
 	"context"
 	"math"
 
-	agentcommunicationpb "github.com/adjackura/midgard/internal/google.golang.org/genproto/googleapis/cloud/agentcommunication/v1"
+	agentcommunicationpb "github.com/adjackura/midgard/cloud.google.com/go/agentcommunication/apiv1/agentcommunicationpb"
 	gax "github.com/googleapis/gax-go/v2"
 	"google.golang.org/api/option"
 	"google.golang.org/api/option/internaloption"
 	gtransport "google.golang.org/api/transport/grpc"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 )
 
 var newClientHook clientHook
@@ -109,9 +108,6 @@ type gRPCClient struct {
 	// Connection pool of gRPC connections to the service.
 	connPool gtransport.ConnPool
 
-	// flag to opt out of default deadlines via GOOGLE_API_GO_EXPERIMENTAL_DISABLE_DEFAULT_DEADLINE
-	disableDeadlines bool
-
 	// Points back to the CallOptions field of the containing Client
 	CallOptions **CallOptions
 
@@ -119,7 +115,7 @@ type gRPCClient struct {
 	client agentcommunicationpb.AgentCommunicationClient
 
 	// The x-goog-* metadata to be sent with each request.
-	xGoogMetadata metadata.MD
+	xGoogHeaders []string
 }
 
 // NewClient creates a new agent communication client based on gRPC.
@@ -136,11 +132,6 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (*Client, error
 		clientOpts = append(clientOpts, hookOpts...)
 	}
 
-	disableDeadlines, err := checkDisableDeadlines()
-	if err != nil {
-		return nil, err
-	}
-
 	connPool, err := gtransport.DialPool(ctx, append(clientOpts, opts...)...)
 	if err != nil {
 		return nil, err
@@ -148,10 +139,9 @@ func NewClient(ctx context.Context, opts ...option.ClientOption) (*Client, error
 	client := Client{CallOptions: defaultCallOptions()}
 
 	c := &gRPCClient{
-		connPool:         connPool,
-		disableDeadlines: disableDeadlines,
-		client:           agentcommunicationpb.NewAgentCommunicationClient(connPool),
-		CallOptions:      &client.CallOptions,
+		connPool:    connPool,
+		client:      agentcommunicationpb.NewAgentCommunicationClient(connPool),
+		CallOptions: &client.CallOptions,
 	}
 	c.setGoogleClientInfo()
 
@@ -172,9 +162,9 @@ func (c *gRPCClient) Connection() *grpc.ClientConn {
 // the `x-goog-api-client` header passed on each request. Intended for
 // use by Google-written clients.
 func (c *gRPCClient) setGoogleClientInfo(keyval ...string) {
-	kv := append([]string{"gl-go", versionGo()}, keyval...)
+	kv := append([]string{"gl-go", gax.GoVersion}, keyval...)
 	kv = append(kv, "gapic", getVersionClient(), "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogMetadata = metadata.Pairs("x-goog-api-client", gax.XGoogHeader(kv...))
+	c.xGoogHeaders = []string{"x-goog-api-client", gax.XGoogHeader(kv...)}
 }
 
 // Close closes the connection to the API service. The user should invoke this when
@@ -184,7 +174,7 @@ func (c *gRPCClient) Close() error {
 }
 
 func (c *gRPCClient) StreamAgentMessages(ctx context.Context, opts ...gax.CallOption) (agentcommunicationpb.AgentCommunication_StreamAgentMessagesClient, error) {
-	ctx = insertMetadata(ctx, c.xGoogMetadata)
+	ctx = gax.InsertMetadataIntoOutgoingContext(ctx, c.xGoogHeaders...)
 	var resp agentcommunicationpb.AgentCommunication_StreamAgentMessagesClient
 	opts = append((*c.CallOptions).StreamAgentMessages[0:len((*c.CallOptions).StreamAgentMessages):len((*c.CallOptions).StreamAgentMessages)], opts...)
 	err := gax.Invoke(ctx, func(ctx context.Context, settings gax.CallSettings) error {
