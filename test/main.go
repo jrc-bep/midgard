@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	endpoint = flag.String("endpoint", "", "endpoint override, don't set if not needed")
+	endpoint = flag.String("endpoint", "us-west1-agentcommunication.googleapis.com:443", "endpoint override, don't set if not needed")
 	channel  = flag.String("channel", "my-channel", "channel")
 )
 
